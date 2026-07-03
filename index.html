@@ -404,11 +404,11 @@ body {
   font-size: 12px;
   box-shadow: 0 4px 16px var(--tooltip-shadow);
   z-index: 100;
-  max-width: 240px;
+  max-width: 280px;
   opacity: 0;
   transition: opacity 0.1s;
 }
-.tooltip.visible { opacity: 1; }
+.tooltip.visible { opacity: 1; pointer-events: auto; }
 
 .tooltip-date {
   font-size: 11px;
@@ -417,6 +417,18 @@ body {
   letter-spacing: 0.03em;
   text-transform: uppercase;
   margin-bottom: 6px;
+}
+.tooltip-date a {
+  color: var(--accent);
+  text-decoration: none;
+}
+.tooltip-date a:hover { text-decoration: underline; }
+
+.tooltip-filter-rank {
+  font-weight: 400;
+  color: var(--text-muted);
+  font-size: 11px;
+  margin-left: 2px;
 }
 
 .tooltip-row {
@@ -623,6 +635,27 @@ let jalensActive = false;
 let showingTable = false;
 
 const JALENS = DATA.players.filter(p => /^ja[iye]?l[eaoy]+n$/i.test(p.fn || '')).map(p => p.n);
+
+const SNAPSHOT_TS = ['20221214222520','20230120195414','20230330073422','20230413214212','20231206000517','20240215014418','20240518183526','20240527054616','20240819010352','20240916144559','20241112061602','20250128154605','20250327022818','20250404003329','20250524001339','20250620211439','20250724134715','20250806171427','20250901133647','20251005180313','20251215145256','20260111044941','20260226190849'];
+const SNAP_DATES = SNAPSHOT_TS.map(ts => ({ d: `${ts.slice(0,4)}-${ts.slice(4,6)}-${ts.slice(6,8)}`, ts }));
+
+function ringerLink(date) {
+  const live = 'https://nbarankings.theringer.com/rankings';
+  let best = null, bestDiff = Infinity;
+  for (const s of SNAP_DATES) {
+    const diff = Math.abs(new Date(date) - new Date(s.d));
+    if (diff < bestDiff) { bestDiff = diff; best = s.ts; }
+  }
+  if (bestDiff < 7 * 86400000) return `https://web.archive.org/web/${best}/${live}`;
+  return live;
+}
+
+function getFilterLabel() {
+  if (jalensActive) return 'Jalens';
+  if (activePosition) return activePosition + 's';
+  if (activeTeam) return activeTeam.split(' ').pop();
+  return null;
+}
 
 function init() {
   const posDiv = document.getElementById('positionFilters');
@@ -962,12 +995,14 @@ function drawChart() {
 
       if (rows.length === 0) { tooltip.classList.remove('visible'); return; }
 
-      document.getElementById('tooltipDate').textContent = dateStr;
-      const rowsHtml = rows.map(r => `
+      const link = ringerLink(dates[di]);
+      document.getElementById('tooltipDate').innerHTML = `<a href="${link}" target="_blank" rel="noopener">${dateStr} ↗</a>`;
+      const filterLabel = getFilterLabel();
+      const rowsHtml = rows.map((r, ri) => `
         <div class="tooltip-row">
           <span class="tooltip-swatch" style="background:${r.color}"></span>
           <span class="tooltip-name">${escapeHtml(r.name)}</span>
-          <span class="tooltip-rank">#${r.rank}</span>
+          <span class="tooltip-rank">#${r.rank}${filterLabel ? `<span class="tooltip-filter-rank">(#${ri + 1})</span>` : ''}</span>
         </div>
       `).join('');
       document.getElementById('tooltipRows').innerHTML = rowsHtml;
@@ -982,10 +1017,16 @@ function drawChart() {
     });
   });
 
-  svg.addEventListener('pointerleave', () => {
-    crosshair.style.display = 'none';
-    tooltip.classList.remove('visible');
-  });
+  let hideTimeout;
+  function scheduleHide() {
+    hideTimeout = setTimeout(() => {
+      crosshair.style.display = 'none';
+      tooltip.classList.remove('visible');
+    }, 120);
+  }
+  svg.addEventListener('pointerleave', scheduleHide);
+  tooltip.addEventListener('pointerenter', () => clearTimeout(hideTimeout));
+  tooltip.addEventListener('pointerleave', scheduleHide);
 }
 
 function renderTable() {
