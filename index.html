@@ -211,32 +211,51 @@ body {
   margin-bottom: 8px;
 }
 
-.jalen-btn {
+.preset-grid {
   display: flex;
-  align-items: center;
-  gap: 8px;
-  width: 100%;
-  padding: 10px 14px;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+.preset-btn {
+  padding: 6px 10px;
+  font-size: 12px;
+  font-weight: 600;
+  background: var(--filter-bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  cursor: pointer;
+  color: var(--text-secondary);
+  transition: all 0.12s;
+  font-family: inherit;
+  white-space: nowrap;
+}
+.preset-btn:hover { border-color: var(--accent); color: var(--text-primary); }
+.preset-btn.active {
+  background: var(--accent);
+  color: #fff;
+  border-color: var(--accent);
+}
+.preset-btn.jalen {
   background: var(--jalen-btn-bg);
   color: var(--jalen-btn-text);
-  border: none;
-  border-radius: 8px;
-  font-size: 14px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: background 0.15s, transform 0.1s;
-  text-align: left;
+  border-color: var(--jalen-btn-bg);
 }
-.jalen-btn:hover { background: var(--accent-hover); }
-.jalen-btn:active { transform: scale(0.98); }
-.jalen-btn.active {
+.preset-btn.jalen.active {
   box-shadow: inset 0 0 0 2px rgba(255,255,255,0.3);
 }
 
-.jalen-icon {
-  font-size: 18px;
-  line-height: 1;
+.draft-select {
+  width: 100%;
+  padding: 6px 8px;
+  font-size: 12px;
+  font-family: inherit;
+  background: var(--filter-bg);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--text-secondary);
+  cursor: pointer;
 }
+.draft-select:focus { border-color: var(--accent); outline: none; }
 
 .search-input {
   width: 100%;
@@ -546,10 +565,36 @@ body {
 
   <div class="filter-section">
     <div class="filter-label">Presets</div>
-    <button class="jalen-btn" id="jalenBtn" onclick="toggleJalens()">
-      <span class="jalen-icon">J</span>
-      The Jalens
-    </button>
+    <div class="preset-grid">
+      <button class="preset-btn jalen" id="jalenBtn" onclick="togglePreset('jalens')">The Jalens</button>
+      <button class="preset-btn" id="maxBtn" onclick="togglePreset('max')">Max $</button>
+      <button class="preset-btn" id="rookiesBtn" onclick="togglePreset('rookies')">Rookies</button>
+      <button class="preset-btn" id="moversBtn" onclick="togglePreset('movers')">Movers</button>
+    </div>
+  </div>
+
+  <div class="filter-section">
+    <div class="filter-label">Tier</div>
+    <div class="filter-group" id="tierFilters">
+      <button class="filter-chip" onclick="toggleTier(10, this)">Top 10</button>
+      <button class="filter-chip" onclick="toggleTier(25, this)">Top 25</button>
+      <button class="filter-chip" onclick="toggleTier(50, this)">Top 50</button>
+    </div>
+  </div>
+
+  <div class="filter-section">
+    <div class="filter-label">Conference</div>
+    <div class="filter-group" id="confFilters">
+      <button class="filter-chip" onclick="toggleConference('east', this)">East</button>
+      <button class="filter-chip" onclick="toggleConference('west', this)">West</button>
+    </div>
+  </div>
+
+  <div class="filter-section">
+    <div class="filter-label">Draft Class</div>
+    <select class="draft-select" id="draftSelect" onchange="selectDraftClass(this.value)">
+      <option value="">All classes</option>
+    </select>
   </div>
 
   <div class="divider"></div>
@@ -633,8 +678,60 @@ let activePosition = null;
 let activeTeam = null;
 let jalensActive = false;
 let showingTable = false;
+let activePreset = null;
+let activeTier = null;
+let activeConference = null;
+let activeDraftClass = null;
 
 const JALENS = DATA.players.filter(p => /^ja[iye]?l[eaoy]+n$/i.test(p.fn || '')).map(p => p.n);
+
+const EAST_TEAMS = new Set(['Atlanta Hawks','Boston Celtics','Brooklyn Nets','Charlotte Hornets','Chicago Bulls','Cleveland Cavaliers','Detroit Pistons','Indiana Pacers','Miami Heat','Milwaukee Bucks','New York Knicks','Orlando Magic','Philadelphia 76ers','Toronto Raptors','Washington Wizards']);
+const WEST_TEAMS = new Set(['Dallas Mavericks','Denver Nuggets','Golden State Warriors','Houston Rockets','Los Angeles Clippers','Los Angeles Lakers','Memphis Grizzlies','Minnesota Timberwolves','New Orleans Pelicans','Oklahoma City Thunder','Phoenix Suns','Portland Trail Blazers','Sacramento Kings','San Antonio Spurs','Utah Jazz']);
+
+const MAX_PLAYERS = new Set(['Giannis Antetokounmpo','Stephen Curry','Nikola Jokic','Luka Doncic','Kevin Durant','Jayson Tatum','Joel Embiid','Anthony Davis','Shai Gilgeous-Alexander','Damian Lillard','Jaylen Brown','Anthony Edwards','Donovan Mitchell','Devin Booker','Ja Morant','Zion Williamson','Karl-Anthony Towns','Trae Young','Kyrie Irving','Paul George','Jimmy Butler','Bam Adebayo','Domantas Sabonis','Pascal Siakam','Lauri Markkanen','Tyrese Maxey','Cade Cunningham','Jalen Brunson','Franz Wagner','Victor Wembanyama','Scottie Barnes','Evan Mobley','Paolo Banchero','De\'Aaron Fox','Fred VanVleet','Bradley Beal','Tyrese Haliburton','LeBron James']);
+
+const DRAFT_YEAR = {
+'LeBron James':2003,'Chris Paul':2005,'Kyle Lowry':2006,'Kevin Durant':2007,'Al Horford':2007,'Mike Conley':2007,
+'Russell Westbrook':2008,'Brook Lopez':2008,'Nicolas Batum':2008,
+'Stephen Curry':2009,'James Harden':2009,'DeMar DeRozan':2009,'Jrue Holiday':2009,
+'Paul George':2010,'Gordon Hayward':2010,
+'Kawhi Leonard':2011,'Kyrie Irving':2011,'Klay Thompson':2011,'Jimmy Butler':2011,'Nikola Vucevic':2011,'Jonas Valanciunas':2011,'Tobias Harris':2011,'Bojan Bogdanovic':2011,
+'Anthony Davis':2012,'Damian Lillard':2012,'Bradley Beal':2012,'Draymond Green':2012,'Khris Middleton':2012,'Harrison Barnes':2012,
+'Giannis Antetokounmpo':2013,'CJ McCollum':2013,'Rudy Gobert':2013,'Kelly Olynyk':2013,'Dennis Schroder':2013,'Steven Adams':2013,'Seth Curry':2013,'Kentavious Caldwell-Pope':2013,
+'Joel Embiid':2014,'Julius Randle':2014,'Marcus Smart':2014,'Clint Capela':2014,'Nikola Jokic':2014,'Zach LaVine':2014,'Aaron Gordon':2014,'Jordan Clarkson':2014,'Jerami Grant':2014,'Jusuf Nurkic':2014,'Spencer Dinwiddie':2014,'Bogdan Bogdanovic':2014,'Andrew Wiggins':2014,'Kyle Anderson':2014,
+'Karl-Anthony Towns':2015,"D'Angelo Russell":2015,'Devin Booker':2015,'Myles Turner':2015,'Bobby Portis':2015,'Kevon Looney':2015,'Norm Powell':2015,'Terry Rozier':2015,'Kristaps Porzingis':2015,'Christian Wood':2015,
+'Ben Simmons':2016,'Brandon Ingram':2016,'Jaylen Brown':2016,'Pascal Siakam':2016,'Domantas Sabonis':2016,'Malcolm Brogdon':2016,'Jakob Poeltl':2016,'Buddy Hield':2016,'Caris LeVert':2016,'Dejounte Murray':2016,'Fred VanVleet':2016,'Ivica Zubac':2016,'Malik Beasley':2016,'Alex Caruso':2016,
+'Jayson Tatum':2017,'Donovan Mitchell':2017,"De'Aaron Fox":2017,'Lauri Markkanen':2017,'Bam Adebayo':2017,'OG Anunoby':2017,'John Collins':2017,'Jarrett Allen':2017,'Josh Hart':2017,'Dillon Brooks':2017,'Derrick White':2017,'Kyle Kuzma':2017,'Malik Monk':2017,'Lonzo Ball':2017,'Markelle Fultz':2017,
+'Luka Doncic':2018,'Trae Young':2018,'Deandre Ayton':2018,'Shai Gilgeous-Alexander':2018,'Mikal Bridges':2018,'Donte DiVincenzo':2018,'Kevin Huerter':2018,'Grayson Allen':2018,'Collin Sexton':2018,'Mitchell Robinson':2018,'Anfernee Simons':2018,'Jalen Brunson':2018,'Robert Williams III':2018,'Wendell Carter Jr.':2018,'Michael Porter Jr.':2018,'Jaren Jackson Jr.':2018,'Gary Trent Jr.':2018,
+'Ja Morant':2019,'Zion Williamson':2019,'RJ Barrett':2019,'Tyler Herro':2019,'P.J. Washington':2019,'Darius Garland':2019,'Jordan Poole':2019,'Bol Bol':2019,'Grant Williams':2019,'Keldon Johnson':2019,'Cam Johnson':2019,'Nickeil Alexander-Walker':2019,"De'Andre Hunter":2019,'Nic Claxton':2019,'Rui Hachimura':2019,'Coby White':2019,'Lu Dort':2019,'Naz Reid':2019,
+'Anthony Edwards':2020,'LaMelo Ball':2020,'Tyrese Haliburton':2020,'Deni Avdija':2020,'Devin Vassell':2020,'Immanuel Quickley':2020,'Desmond Bane':2020,'Payton Pritchard':2020,'Isaiah Stewart':2020,'Aaron Nesmith':2020,'Jaden McDaniels':2020,'Tyrese Maxey':2020,'Onyeka Okongwu':2020,
+'Cade Cunningham':2021,'Evan Mobley':2021,'Scottie Barnes':2021,'Jalen Green':2021,'Jalen Suggs':2021,'Franz Wagner':2021,'Josh Giddey':2021,'Alperen Sengun':2021,'Herb Jones':2021,'Bones Hyland':2021,'Jonathan Kuminga':2021,'Trey Murphy III':2021,'Quentin Grimes':2021,'Ayo Dosunmu':2021,'Austin Reaves':2021,'Miles McBride':2021,'Jose Alvarado':2021,
+'Paolo Banchero':2022,'Chet Holmgren':2022,'Jabari Smith Jr.':2022,'Jalen Duren':2022,'Bennedict Mathurin':2022,'Keegan Murray':2022,'Walker Kessler':2022,'Andrew Nembhard':2022,'Dyson Daniels':2022,'Jeremy Sochan':2022,'Shaedon Sharpe':2022,'Jaden Ivey':2022,'Mark Williams':2022,'Tari Eason':2022,'Christian Braun':2022,'Peyton Watson':2022,'Moussa Diabate':2022,'Ryan Rollins':2022,'Jalen Williams':2022,
+'Victor Wembanyama':2023,'Brandon Miller':2023,'Cason Wallace':2023,'Jaime Jaquez Jr.':2023,'Dereck Lively II':2023,'Gradey Dick':2023,'Ausar Thompson':2023,'Jarace Walker':2023,'Keyonte George':2023,'Anthony Black':2023,'Toumani Camara':2023,'Julian Champagnie':2023,
+'Reed Sheppard':2024,'Donovan Clingan':2024,'Stephon Castle':2024,'Alex Sarr':2024,'Matas Buzelis':2024,'Rob Dillingham':2024,'Ajay Mitchell':2024,
+'Cooper Flagg':2025,'Dylan Harper':2025,'VJ Edgecombe':2025,'Kon Knueppel':2025,'Derik Queen':2025,'Collin Murray-Boyles':2025
+};
+
+const SEASON_FIRST_DI = {};
+DATA.dates.forEach((d, i) => {
+  const [y, m] = d.split('-').map(Number);
+  const season = m >= 10 ? `${y}-${String(y+1).slice(-2)}` : `${y-1}-${String(y).slice(-2)}`;
+  if (!(season in SEASON_FIRST_DI)) SEASON_FIRST_DI[season] = i;
+});
+const LATEST_SEASON = DATA.seasons[DATA.seasons.length - 1];
+
+const ROOKIES = DATA.players.filter(p => {
+  const firstDi = Math.min(...p.d.map(e => e[0]));
+  const firstDate = DATA.dates[firstDi];
+  const [y, m] = firstDate.split('-').map(Number);
+  const firstSeason = m >= 10 ? `${y}-${String(y+1).slice(-2)}` : `${y-1}-${String(y).slice(-2)}`;
+  return firstSeason === LATEST_SEASON;
+}).map(p => p.n);
+
+const MOVERS = DATA.players.map(p => {
+  const ranks = p.d.map(e => e[1]);
+  return { n: p.n, range: Math.max(...ranks) - Math.min(...ranks) };
+}).filter(m => m.range > 0).sort((a, b) => b.range - a.range).slice(0, 8).map(m => m.n);
 
 const SNAPSHOT_TS = ['20221214222520','20230120195414','20230330073422','20230413214212','20231206000517','20240215014418','20240518183526','20240527054616','20240819010352','20240916144559','20241112061602','20250128154605','20250327022818','20250404003329','20250524001339','20250620211439','20250724134715','20250806171427','20250901133647','20251005180313','20251215145256','20260111044941','20260226190849'];
 const SNAP_DATES = SNAPSHOT_TS.map(ts => ({ d: `${ts.slice(0,4)}-${ts.slice(4,6)}-${ts.slice(6,8)}`, ts }));
@@ -651,10 +748,36 @@ function ringerLink(date) {
 }
 
 function getFilterLabel() {
-  if (jalensActive) return 'Jalens';
+  if (activePreset === 'jalens') return 'Jalens';
+  if (activePreset === 'max') return 'Max $';
+  if (activePreset === 'rookies') return 'Rookies';
+  if (activePreset === 'movers') return 'Movers';
+  if (activeTier) return 'Top ' + activeTier;
+  if (activeConference) return activeConference === 'east' ? 'East' : 'West';
+  if (activeDraftClass) return activeDraftClass + ' Draft';
   if (activePosition) return activePosition + 's';
   if (activeTeam) return activeTeam.split(' ').pop();
   return null;
+}
+
+function clearFilterUI() {
+  document.querySelectorAll('.preset-btn').forEach(b => b.classList.remove('active'));
+  document.querySelectorAll('.filter-chip').forEach(c => c.classList.remove('active'));
+  document.getElementById('draftSelect').value = '';
+  activePreset = null;
+  activeTier = null;
+  activeConference = null;
+  activeDraftClass = null;
+  activePosition = null;
+  activeTeam = null;
+  jalensActive = false;
+}
+
+function selectPlayers(names, max) {
+  selectedPlayers.clear();
+  resetColors();
+  const limit = max || 8;
+  names.slice(0, limit).forEach(n => { selectedPlayers.add(n); assignColor(n); });
 }
 
 function init() {
@@ -677,56 +800,129 @@ function init() {
     chip.onclick = () => toggleTeam(team, chip);
     teamDiv.appendChild(chip);
   });
+
+  const draftYears = [...new Set(Object.values(DRAFT_YEAR))].sort((a, b) => b - a);
+  const sel = document.getElementById('draftSelect');
+  draftYears.forEach(y => {
+    const count = DATA.players.filter(p => DRAFT_YEAR[p.n] === y).length;
+    if (count === 0) return;
+    const opt = document.createElement('option');
+    opt.value = y;
+    opt.textContent = y + ' (' + count + ')';
+    sel.appendChild(opt);
+  });
 }
 
-function toggleJalens() {
-  jalensActive = !jalensActive;
-  const btn = document.getElementById('jalenBtn');
-  btn.classList.toggle('active', jalensActive);
-  if (jalensActive) {
+function togglePreset(type) {
+  const wasActive = activePreset === type;
+  clearFilterUI();
+
+  if (wasActive) {
     selectedPlayers.clear();
     resetColors();
-    JALENS.forEach(n => { selectedPlayers.add(n); assignColor(n); });
-    activePosition = null;
-    activeTeam = null;
-    document.querySelectorAll('.filter-chip').forEach(c => c.classList.remove('active'));
-  } else {
-    selectedPlayers.clear();
-    resetColors();
+    render();
+    return;
   }
+
+  activePreset = type;
+  jalensActive = type === 'jalens';
+  document.getElementById(type === 'jalens' ? 'jalenBtn' : type === 'max' ? 'maxBtn' : type === 'rookies' ? 'rookiesBtn' : 'moversBtn').classList.add('active');
+
+  const lists = { jalens: JALENS, max: DATA.players.filter(p => MAX_PLAYERS.has(p.n)).map(p => p.n), rookies: ROOKIES, movers: MOVERS };
+  selectPlayers(lists[type], type === 'max' ? 8 : undefined);
+  render();
+}
+
+function toggleTier(n, chip) {
+  const wasActive = activeTier === n;
+  clearFilterUI();
+
+  if (wasActive) {
+    selectedPlayers.clear();
+    resetColors();
+    render();
+    return;
+  }
+
+  activeTier = n;
+  chip.classList.add('active');
+  const inTier = DATA.players.filter(p => Math.min(...p.d.map(e => e[1])) <= n)
+    .sort((a, b) => Math.min(...a.d.map(e => e[1])) - Math.min(...b.d.map(e => e[1])));
+  selectPlayers(inTier.map(p => p.n), 8);
+  render();
+}
+
+function toggleConference(conf, chip) {
+  const wasActive = activeConference === conf;
+  clearFilterUI();
+
+  if (wasActive) {
+    selectedPlayers.clear();
+    resetColors();
+    render();
+    return;
+  }
+
+  activeConference = conf;
+  chip.classList.add('active');
+  const teams = conf === 'east' ? EAST_TEAMS : WEST_TEAMS;
+  const inConf = DATA.players.filter(p => teams.has(p.t))
+    .sort((a, b) => Math.min(...a.d.map(e => e[1])) - Math.min(...b.d.map(e => e[1])));
+  selectPlayers(inConf.map(p => p.n), 8);
+  render();
+}
+
+function selectDraftClass(year) {
+  clearFilterUI();
+
+  if (!year) {
+    selectedPlayers.clear();
+    resetColors();
+    render();
+    return;
+  }
+
+  activeDraftClass = parseInt(year);
+  document.getElementById('draftSelect').value = year;
+  const inClass = DATA.players.filter(p => DRAFT_YEAR[p.n] === activeDraftClass)
+    .sort((a, b) => Math.min(...a.d.map(e => e[1])) - Math.min(...b.d.map(e => e[1])));
+  selectPlayers(inClass.map(p => p.n), 8);
   render();
 }
 
 function togglePosition(pos, chip) {
-  jalensActive = false;
-  document.getElementById('jalenBtn').classList.remove('active');
-  if (activePosition === pos) {
-    activePosition = null;
-    chip.classList.remove('active');
-  } else {
-    document.querySelectorAll('#positionFilters .filter-chip').forEach(c => c.classList.remove('active'));
-    activePosition = pos;
-    chip.classList.add('active');
+  const wasActive = activePosition === pos;
+  clearFilterUI();
+
+  if (wasActive) {
+    selectedPlayers.clear();
+    resetColors();
+    render();
+    return;
   }
+
+  activePosition = pos;
+  chip.classList.add('active');
   applyFilters();
 }
 
 function toggleTeam(team, chip) {
-  jalensActive = false;
-  document.getElementById('jalenBtn').classList.remove('active');
-  if (activeTeam === team) {
-    activeTeam = null;
-    chip.classList.remove('active');
-  } else {
-    document.querySelectorAll('#teamFilters .filter-chip').forEach(c => c.classList.remove('active'));
-    activeTeam = team;
-    chip.classList.add('active');
+  const wasActive = activeTeam === team;
+  clearFilterUI();
+
+  if (wasActive) {
+    selectedPlayers.clear();
+    resetColors();
+    render();
+    return;
   }
+
+  activeTeam = team;
+  chip.classList.add('active');
   applyFilters();
 }
 
 function applyFilters() {
-  if (!activePosition && !activeTeam) return;
   selectedPlayers.clear();
   resetColors();
   let filtered = DATA.players;
@@ -736,7 +932,6 @@ function applyFilters() {
     filtered = filtered.filter(p => validPos.includes(p.p));
   }
   if (activeTeam) filtered = filtered.filter(p => p.t === activeTeam);
-  // Pick top 8 by best rank achieved
   const withBest = filtered.map(p => {
     const bestRank = Math.min(...p.d.map(d => d[1]));
     return { ...p, bestRank };
@@ -747,8 +942,7 @@ function applyFilters() {
 
 function addPlayer(name) {
   if (selectedPlayers.size >= 8 && !selectedPlayers.has(name)) return;
-  jalensActive = false;
-  document.getElementById('jalenBtn').classList.remove('active');
+  clearFilterUI();
   selectedPlayers.add(name);
   assignColor(name);
   render();
@@ -756,19 +950,14 @@ function addPlayer(name) {
 
 function removePlayer(name) {
   selectedPlayers.delete(name);
-  jalensActive = false;
-  document.getElementById('jalenBtn').classList.remove('active');
+  clearFilterUI();
   render();
 }
 
 function clearAll() {
   selectedPlayers.clear();
   resetColors();
-  jalensActive = false;
-  activePosition = null;
-  activeTeam = null;
-  document.getElementById('jalenBtn').classList.remove('active');
-  document.querySelectorAll('.filter-chip').forEach(c => c.classList.remove('active'));
+  clearFilterUI();
   render();
 }
 
@@ -812,8 +1001,20 @@ function render() {
 
   if (selectedPlayers.size === 0) {
     document.getElementById('chartTitle').textContent = 'The Ringer 100';
-  } else if (jalensActive) {
+  } else if (activePreset === 'jalens') {
     document.getElementById('chartTitle').textContent = 'The Jalens';
+  } else if (activePreset === 'max') {
+    document.getElementById('chartTitle').textContent = 'Max Contract Players';
+  } else if (activePreset === 'rookies') {
+    document.getElementById('chartTitle').textContent = LATEST_SEASON + ' Rookies';
+  } else if (activePreset === 'movers') {
+    document.getElementById('chartTitle').textContent = 'Biggest Movers';
+  } else if (activeTier) {
+    document.getElementById('chartTitle').textContent = 'Ever Ranked Top ' + activeTier;
+  } else if (activeConference) {
+    document.getElementById('chartTitle').textContent = (activeConference === 'east' ? 'Eastern' : 'Western') + ' Conference';
+  } else if (activeDraftClass) {
+    document.getElementById('chartTitle').textContent = activeDraftClass + ' Draft Class';
   } else if (activeTeam) {
     document.getElementById('chartTitle').textContent = activeTeam;
   } else if (activePosition) {
