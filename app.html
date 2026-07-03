@@ -622,7 +622,7 @@ let activeTeam = null;
 let jalensActive = false;
 let showingTable = false;
 
-const JALENS = DATA.players.filter(p => (p.fn || '').toLowerCase() === 'jalen').map(p => p.n);
+const JALENS = DATA.players.filter(p => /^ja[iye]?l[eaoy]+n$/i.test(p.fn || '')).map(p => p.n);
 
 function init() {
   const posDiv = document.getElementById('positionFilters');
