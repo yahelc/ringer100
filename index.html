@@ -807,17 +807,12 @@ function onSearch(query) {
 
 function render() {
   renderSelectedTags();
-  if (selectedPlayers.size === 0) {
-    document.getElementById('chartSvg').style.display = 'none';
-    document.getElementById('emptyState').style.display = '';
-    document.getElementById('chartTitle').textContent = 'Select players to chart';
-    renderTable();
-    return;
-  }
   document.getElementById('emptyState').style.display = 'none';
   document.getElementById('chartSvg').style.display = '';
 
-  if (jalensActive) {
+  if (selectedPlayers.size === 0) {
+    document.getElementById('chartTitle').textContent = 'The Ringer 100';
+  } else if (jalensActive) {
     document.getElementById('chartTitle').textContent = 'The Jalens';
   } else if (activeTeam) {
     document.getElementById('chartTitle').textContent = activeTeam;
@@ -836,7 +831,7 @@ function renderSelectedTags() {
   const container = document.getElementById('selectedPlayers');
   const clearBtn = document.getElementById('clearBtn');
   if (selectedPlayers.size === 0) {
-    container.innerHTML = '<div style="font-size:12px;color:var(--text-muted)">No players selected</div>';
+    container.innerHTML = '<div style="font-size:12px;color:var(--text-muted)">Showing all players — select or filter to focus</div>';
     clearBtn.style.display = 'none';
     return;
   }
@@ -873,10 +868,11 @@ function drawChart() {
   const plotH = H - margin.top - margin.bottom;
 
   const dates = DATA.dates;
-  const players = DATA.players.filter(p => selectedPlayers.has(p.n));
+  const overviewMode = selectedPlayers.size === 0;
+  const players = overviewMode ? DATA.players : DATA.players.filter(p => selectedPlayers.has(p.n));
 
   // Determine rank range
-  let maxRank = 100;
+  let maxRank = overviewMode ? 100 : 100;
   players.forEach(p => {
     p.d.forEach(([di, r]) => { if (r > maxRank) maxRank = r; });
   });
@@ -926,39 +922,39 @@ function drawChart() {
   // Lines and dots for each player
   const endLabels = [];
   players.forEach(player => {
-    const color = assignColor(player.n);
+    const color = overviewMode ? 'var(--deemph)' : assignColor(player.n);
     const points = player.d.filter(([di]) => di >= 0 && di < dates.length);
     if (points.length === 0) return;
 
-    // Line (or just dot for single point)
     if (points.length >= 2) {
       const pathParts = points.map(([di, r], i) => `${i === 0 ? 'M' : 'L'}${xScale(di).toFixed(1)},${yScale(r).toFixed(1)}`);
-      html += `<path d="${pathParts.join(' ')}" fill="none" stroke="${color}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>`;
+      html += `<path d="${pathParts.join(' ')}" fill="none" stroke="${color}" stroke-width="${overviewMode ? 1 : 2}" stroke-linecap="round" stroke-linejoin="round" opacity="${overviewMode ? 0.4 : 1}"/>`;
     }
 
-    // End dot with surface ring
-    const last = points[points.length - 1];
-    const lx = xScale(last[0]);
-    const ly = yScale(last[1]);
-    html += `<circle cx="${lx}" cy="${ly}" r="5" fill="var(--surface-chart)" stroke="none"/>`;
-    html += `<circle cx="${lx}" cy="${ly}" r="4" fill="${color}" stroke="none"/>`;
-
-    endLabels.push({ x: lx, y: ly, name: player.n, color });
+    if (!overviewMode) {
+      const last = points[points.length - 1];
+      const lx = xScale(last[0]);
+      const ly = yScale(last[1]);
+      html += `<circle cx="${lx}" cy="${ly}" r="5" fill="var(--surface-chart)" stroke="none"/>`;
+      html += `<circle cx="${lx}" cy="${ly}" r="4" fill="${color}" stroke="none"/>`;
+      endLabels.push({ x: lx, y: ly, name: player.n, color });
+    }
   });
 
-  // Nudge end labels to avoid collision
-  endLabels.sort((a, b) => a.y - b.y);
-  const labelH = 13;
-  for (let i = 1; i < endLabels.length; i++) {
-    const prev = endLabels[i - 1];
-    const curr = endLabels[i];
-    if (curr.y - prev.y < labelH) {
-      curr.y = prev.y + labelH;
+  if (!overviewMode) {
+    endLabels.sort((a, b) => a.y - b.y);
+    const labelH = 13;
+    for (let i = 1; i < endLabels.length; i++) {
+      const prev = endLabels[i - 1];
+      const curr = endLabels[i];
+      if (curr.y - prev.y < labelH) {
+        curr.y = prev.y + labelH;
+      }
     }
+    endLabels.forEach(lbl => {
+      html += `<text x="${lbl.x + 8}" y="${lbl.y}" fill="var(--text-secondary)" font-size="11" dominant-baseline="middle" font-weight="500">${lbl.name}</text>`;
+    });
   }
-  endLabels.forEach(lbl => {
-    html += `<text x="${lbl.x + 8}" y="${lbl.y}" fill="var(--text-secondary)" font-size="11" dominant-baseline="middle" font-weight="500">${lbl.name}</text>`;
-  });
 
   // Invisible hover columns for tooltip
   dates.forEach((d, di) => {
@@ -984,14 +980,25 @@ function drawChart() {
       crosshair.style.display = '';
 
       const dateStr = formatDate(dates[di]);
-      const rows = [];
+      const allAtDate = [];
       players.forEach(p => {
         const point = p.d.find(([pdi]) => pdi === di);
         if (point) {
-          rows.push({ name: p.n, rank: point[1], color: assignColor(p.n) });
+          allAtDate.push({ name: p.n, rank: point[1], color: overviewMode ? 'var(--text-secondary)' : assignColor(p.n) });
         }
       });
-      rows.sort((a, b) => a.rank - b.rank);
+      allAtDate.sort((a, b) => a.rank - b.rank);
+
+      let rows;
+      if (overviewMode) {
+        const svgRect = svg.getBoundingClientRect();
+        const mouseY = e.clientY - svgRect.top;
+        const hoverRank = 1 + ((mouseY - margin.top) / plotH) * (maxRank - 1);
+        const nearby = allAtDate.filter(r => Math.abs(r.rank - hoverRank) <= 3).slice(0, 5);
+        rows = nearby.length > 0 ? nearby : allAtDate.slice(0, 5);
+      } else {
+        rows = allAtDate;
+      }
 
       if (rows.length === 0) { tooltip.classList.remove('visible'); return; }
 
