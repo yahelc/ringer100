@@ -235,14 +235,6 @@ body {
   color: #fff;
   border-color: var(--accent);
 }
-.preset-btn.jalen {
-  background: var(--jalen-btn-bg);
-  color: var(--jalen-btn-text);
-  border-color: var(--jalen-btn-bg);
-}
-.preset-btn.jalen.active {
-  box-shadow: inset 0 0 0 2px rgba(255,255,255,0.3);
-}
 
 .draft-select {
   width: 100%;
@@ -566,7 +558,7 @@ body {
   <div class="filter-section">
     <div class="filter-label">Presets</div>
     <div class="preset-grid">
-      <button class="preset-btn jalen" id="jalenBtn" onclick="togglePreset('jalens')">The Jalens</button>
+      <button class="preset-btn" id="jalenBtn" onclick="togglePreset('jalens')">The Jalens</button>
       <button class="preset-btn" id="maxBtn" onclick="togglePreset('max')">Max $</button>
       <button class="preset-btn" id="rookiesBtn" onclick="togglePreset('rookies')">Rookies</button>
       <button class="preset-btn" id="moversBtn" onclick="togglePreset('movers')">Movers</button>
