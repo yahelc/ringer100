@@ -765,11 +765,10 @@ function clearFilterUI() {
   jalensActive = false;
 }
 
-function selectPlayers(names, max) {
+function selectPlayers(names) {
   selectedPlayers.clear();
   resetColors();
-  const limit = max || 8;
-  names.slice(0, limit).forEach(n => { selectedPlayers.add(n); assignColor(n); });
+  names.forEach(n => { selectedPlayers.add(n); if (names.length <= 8) assignColor(n); });
 }
 
 function init() {
@@ -821,7 +820,7 @@ function togglePreset(type) {
   document.getElementById(type === 'jalens' ? 'jalenBtn' : type === 'max' ? 'maxBtn' : type === 'rookies' ? 'rookiesBtn' : 'moversBtn').classList.add('active');
 
   const lists = { jalens: JALENS, max: DATA.players.filter(p => MAX_PLAYERS.has(p.n)).map(p => p.n), rookies: ROOKIES, movers: MOVERS };
-  selectPlayers(lists[type], type === 'max' ? 8 : undefined);
+  selectPlayers(lists[type]);
   render();
 }
 
@@ -840,7 +839,7 @@ function toggleTier(n, chip) {
   chip.classList.add('active');
   const inTier = DATA.players.filter(p => Math.min(...p.d.map(e => e[1])) <= n)
     .sort((a, b) => Math.min(...a.d.map(e => e[1])) - Math.min(...b.d.map(e => e[1])));
-  selectPlayers(inTier.map(p => p.n), 8);
+  selectPlayers(inTier.map(p => p.n));
   render();
 }
 
@@ -860,7 +859,7 @@ function toggleConference(conf, chip) {
   const teams = conf === 'east' ? EAST_TEAMS : WEST_TEAMS;
   const inConf = DATA.players.filter(p => teams.has(p.t))
     .sort((a, b) => Math.min(...a.d.map(e => e[1])) - Math.min(...b.d.map(e => e[1])));
-  selectPlayers(inConf.map(p => p.n), 8);
+  selectPlayers(inConf.map(p => p.n));
   render();
 }
 
@@ -878,7 +877,7 @@ function selectDraftClass(year) {
   document.getElementById('draftSelect').value = year;
   const inClass = DATA.players.filter(p => DRAFT_YEAR[p.n] === activeDraftClass)
     .sort((a, b) => Math.min(...a.d.map(e => e[1])) - Math.min(...b.d.map(e => e[1])));
-  selectPlayers(inClass.map(p => p.n), 8);
+  selectPlayers(inClass.map(p => p.n));
   render();
 }
 
@@ -928,7 +927,7 @@ function applyFilters() {
     const bestRank = Math.min(...p.d.map(d => d[1]));
     return { ...p, bestRank };
   }).sort((a, b) => a.bestRank - b.bestRank);
-  withBest.slice(0, 8).forEach(p => { selectedPlayers.add(p.n); assignColor(p.n); });
+  selectPlayers(withBest.map(p => p.n));
   render();
 }
 
@@ -1030,6 +1029,10 @@ function renderSelectedTags() {
   }
   clearBtn.style.display = '';
   container.innerHTML = '';
+  if (selectedPlayers.size > 8) {
+    container.innerHTML = `<div style="font-size:12px;color:var(--text-muted)">${selectedPlayers.size} players — hover chart to identify</div>`;
+    return;
+  }
   [...selectedPlayers].forEach(name => {
     const tag = document.createElement('div');
     tag.className = 'selected-tag';
@@ -1061,8 +1064,8 @@ function drawChart() {
   const plotH = H - margin.top - margin.bottom;
 
   const dates = DATA.dates;
-  const overviewMode = selectedPlayers.size === 0;
-  const players = overviewMode ? DATA.players : DATA.players.filter(p => selectedPlayers.has(p.n));
+  const overviewMode = selectedPlayers.size === 0 || selectedPlayers.size > 8;
+  const players = selectedPlayers.size === 0 ? DATA.players : DATA.players.filter(p => selectedPlayers.has(p.n));
 
   // Determine rank range
   let maxRank = overviewMode ? 100 : 100;
